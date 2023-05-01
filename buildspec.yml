@@ -1,0 +1,33 @@
+version: 0.2
+
+env:
+  variables:
+    ECR_REPO_URL: "705476323497.dkr.ecr.us-east-1.amazonaws.com/wasteclassify"
+    CONTAINER_NAME: "waste"
+    
+phases:
+  install:
+    commands:
+      - apt-get update
+
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REPO_URL
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+  build:
+    commands:
+      - echo Building Flask app
+      - docker build -t $ECR_REPO_URL:$IMAGE_TAG -t $ECR_REPO_URL:latest .
+      - echo Pushing the Docker images to ECR
+      - docker push $ECR_REPO_URL:$IMAGE_TAG
+      - docker push $ECR_REPO_URL:latest
+  post_build:
+    commands:
+      - echo Writing image definitions file ....
+      - printf '[{"name":"%s","imageUri":"%s"}]' $CONTAINER_NAME $ECR_REPO_URL:$IMAGE_TAG 
+      - printf '[{"name":"%s","imageUri":"%s"}]' $CONTAINER_NAME $ECR_REPO_URL:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+artifacts:
+  files:
+    - '**/*'
